@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LoopDraft - AI Content Engine for Indie Builders</title>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<nav>
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="8" fill="#5c6ef8"/>
+      <path d="M8 10h10M8 16h16M8 22h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="24" cy="10" r="3" fill="#f85c9e"/>
+    </svg>
+    LoopDraft
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a class="nav-cta" href="#demo">Start Free</a>
+  </div>
+</nav>
+<section class="hero">
+  <div class="badge">Now in Public Beta</div>
+  <h1>Turn any idea into a <span class="grad">publish-ready draft</span> in 30 seconds</h1>
+  <p class="sub">The AI content engine for indie builders. No agency. No blank page. Just results.</p>
+  <button class="btn" onclick="document.getElementById('demo').scrollIntoView({behavior:'smooth'})">Generate your first draft free</button>
+</section>
+<section id="demo" class="demo-section">
+  <div class="demo-box">
+    <div class="demo-bar">Live Demo - No signup needed</div>
+    <div class="demo-inner">
+      <div class="row">
+        <input id="topicInput" type="text" placeholder="Topic: e.g. SaaS onboarding best practices 2026"/>
+        <button onclick="generateDraft()">Generate</button>
+      </div>
+      <div class="out" id="outputArea">Your AI-drafted article will appear here.</div>
+    </div>
+  </div>
+</section>
+<section class="features" id="features">
+  <div class="section-label">Why LoopDraft</div>
+  <h2>Built to compound. Built to last.</h2>
+  <div class="grid">
+    <div class="card"><div class="icon">Compound Library</div><p>Every draft saves to your library, getting smarter with each use.</p></div>
+    <div class="card"><div class="icon">30-Second Drafts</div><p>From blank page to structured, SEO-aware draft instantly.</p></div>
+    <div class="card"><div class="icon">Niche-Aware Tone</div><p>Set your voice once. Every piece adapts to your brand.</p></div>
+    <div class="card"><div class="icon">SEO Scoring</div><p>Readability score, keyword check, meta description built in.</p></div>
+    <div class="card"><div class="icon">One-Click Publish</div><p>Export to Ghost, Webflow, Notion, or Markdown/HTML.</p></div>
+    <div class="card"><div class="icon">Original Content</div><p>No spinning. No plagiarism risk. Fresh generation every time.</p></div>
+  </div>
+</section>
+<section class="pricing-section" id="pricing">
+  <div class="section-label">Pricing</div>
+  <h2>Start free. Scale when ready.</h2>
+  <div class="plans">
+    <div class="plan">
+      <h3>Starter</h3>
+      <div class="price">$0 / forever</div>
+      <ul><li>5 drafts per month</li><li>Markdown and HTML export</li><li>Basic SEO scoring</li></ul>
+      <button class="btn" style="width:100%">Get started free</button>
+    </div>
+    <div class="plan featured">
+      <h3>Pro</h3>
+      <div class="price">$9 / month</div>
+      <ul><li>Unlimited drafts</li><li>Brand voice training</li><li>One-click CMS publish</li><li>Full SEO suite</li></ul>
+      <a href="https://buy.stripe.com/test_cNi00lejKe1g6CV3oo2wU00" class="btn" style="width:100%;display:block;text-align:center;text-decoration:none">Start free trial</a>
+    </div>
+  </div>
+  <p class="micro">No credit card required for Starter. Cancel Pro anytime.</p>
+</section>
+<footer>
+  <div class="footer-links">
+    <a href="#">About</a><a href="#">Blog</a><a href="#">Docs</a>
+    <a href="mailto:hello@loopdraft.io">Contact</a>
+  </div>
+  <p>LoopDraft - AI Content Engine for Indie Builders - 2026</p>
+</footer>
+<script src="flywheel.js"></script>
+<script src="revenue.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
