@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "name": "loopdraft",
+  "builds": [
+    { "src": "src/*.html", "use": "@vercel/static" },
+    { "src": "src/*.css",  "use": "@vercel/static" },
+    { "src": "src/*.js",   "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/",          "dest": "/src/index.html" },
+    { "src": "/(.*)\.css", "dest": "/src/$1.css" },
+    { "src": "/(.*)\.js",  "dest": "/src/$1.js" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "DENY" },
+        { "key": "X-XSS-Protection",       "value": "1; mode=block" }
+      ]
+    }
+  ]
+}
