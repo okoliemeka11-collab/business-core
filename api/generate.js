@@ -6,7 +6,7 @@
 // Sliding-window rate limiter (module-level = persists across warm invocations)
 const RATE_LIMITS = { RPM: 12, RPD: 1200, MAX_OUTPUT_TOKENS: 800 };
 const counters = {
-  minute: { count: 0, windowStart: Date.now() },h
+  minute: { count: 0, windowStart: Date.now() },
   day:    { count: 0, windowStart: Date.now() },
 };
 
