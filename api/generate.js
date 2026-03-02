@@ -1,4 +1,4 @@
-// api/generate.js — Scrivlo AI Serverless Function
+// api/generate.js — Scrivlo AI Serverless Function (gemini-2.0-flash)
 // Vercel Serverless Function (Node.js 18) — runs on every generate request.
 // Proxies to Gemini Flash API server-side. API key NEVER reaches the browser.
 // Rate-limited to stay within Gemini free tier (15 RPM, 1500 RPD).
