@@ -6,7 +6,7 @@
 // Sliding-window rate limiter (module-level = persists across warm invocations)
 const RATE_LIMITS = { RPM: 12, RPD: 1200, MAX_OUTPUT_TOKENS: 800 };
 const counters = {
-  minute: { count: 0, windowStart: Date.now() },
+  minute: { count: 0, windowStart: Date.now() },h
   day:    { count: 0, windowStart: Date.now() },
 };
 
@@ -113,7 +113,7 @@ module.exports = async function handler(req, res) {
     ],
   };
 
-  const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+  const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
 
   try {
     const https = require("https");
@@ -122,7 +122,7 @@ module.exports = async function handler(req, res) {
     const geminiData = await new Promise((resolve, reject) => {
       const options = {
         hostname: "generativelanguage.googleapis.com",
-        path: "/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey,
+        path: "/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey,
         method: "POST",
         headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
       };
@@ -152,7 +152,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       success: true,
       content,
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       topic: safeTopic,
       rateInfo: {
         minuteUsed: counters.minute.count,
