@@ -1,19 +1,34 @@
 {
-    "version": 2,
-    "outputDirectory": "src",
-    "rewrites": [
-          { "source": "/", "destination": "/index.html" },
-          { "source": "/(.*)\\.css", "destination": "/$1.css" },
-          { "source": "/(.*)\\.js", "destination": "/$1.js" }
-    ],
-    "headers": [
-          {
-                  "source": "/(.*)",
-                  "headers": [
-                            { "key": "X-Content-Type-Options", "value": "nosniff" },
-                            { "key": "X-Frame-Options", "value": "DENY" },
-                            { "key": "X-XSS-Protection", "value": "1; mode=block" }
-                  ]
-          }
-    ]
+  "version": 2,
+  "outputDirectory": "src",
+  "functions": {
+    "api/generate.js": {
+      "runtime": "edge"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/generate", "destination": "/api/generate.js" },
+    { "source": "/",             "destination": "/index.html" },
+    { "source": "/(.*)\\.css",  "destination": "/$1.css" },
+    { "source": "/(.*)\\.js",   "destination": "/$1.js" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "DENY" },
+        { "key": "X-XSS-Protection",       "value": "1; mode=block" },
+        { "key": "Referrer-Policy",        "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin",  "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+        { "key": "Cache-Control",                "value": "no-store" }
+      ]
+    }
+  ]
 }
