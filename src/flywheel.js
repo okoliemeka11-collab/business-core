@@ -1,12 +1,12 @@
-// flywheel.js - LoopDraft Data Flywheel Engine
+// flywheel.js - Scrivlo Data Flywheel Engine
 // Every user interaction improves the next draft automatically.
 // Zero server required. All intelligence lives in localStorage.
 
 const Flywheel = (() => {
-  const STORAGE_KEY = 'ld_voice_profile';
+  const STORAGE_KEY = 'scrivlo_voice_profile';
 
   const defaultProfile = () => ({
-    version: '1.0',
+    version: '1.1',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     draftCount: 0,
@@ -37,7 +37,7 @@ const Flywheel = (() => {
   const onDraftGenerated = (topic) => {
     const p = load();
     p.draftCount++;
-    const clusters = ['saas','ai','marketing','seo','content','startup','growth','product','email','automation','writing'];
+    const clusters = ['saas','ai','marketing','seo','content','startup','growth','product','email','automation','writing','revenue','pricing','brand','funnel'];
     const words = topic.toLowerCase().split(/\s+/);
     words.forEach(w => clusters.forEach(c => {
       if (w.includes(c)) p.topicClusters[c] = (p.topicClusters[c] || 0) + 1;
@@ -78,17 +78,33 @@ const Flywheel = (() => {
 
   const getPersonalizationContext = () => {
     const p = load();
-    const topNiche = Object.entries(p.topicClusters).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
-    const preferredStructures = Object.entries(p.retainedStructures).sort((a,b) => b[1]-a[1]).slice(0,3).map(e => e[0]);
+    const topNiche = Object.entries(p.topicClusters).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const preferredStructures = Object.entries(p.retainedStructures)
+      .sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
     const tone = p.toneScore < 0.35 ? 'casual and conversational'
-               : p.toneScore > 0.65 ? 'professional and authoritative'
-               : 'balanced and direct';
-    return { topNiche, preferredStructures, tone, engagementTier: p.engagementTier,
-             proConversionSignal: p.proConversionSignal, affiliateEligible: p.affiliateEligible,
-             draftCount: p.draftCount, expandVariations: p._expandVariations || false };
+      : p.toneScore > 0.65 ? 'professional and authoritative'
+      : 'balanced and direct';
+    return {
+      topNiche,
+      preferredStructures,
+      tone,
+      engagementTier: p.engagementTier,
+      proConversionSignal: p.proConversionSignal,
+      affiliateEligible: p.affiliateEligible,
+      draftCount: p.draftCount,
+      expandVariations: p._expandVariations || false
+    };
   };
 
-  return { onDraftGenerated, onDraftKept, onRegenerate, onPublish,
-           getPersonalizationContext, shouldShowProModal: () => load().proConversionSignal,
-           shouldShowAffiliateOffer: () => load().affiliateEligible, getProfile: load };
+  return {
+    onDraftGenerated,
+    onDraftKept,
+    onRegenerate,
+    onPublish,
+    getPersonalizationContext,
+    shouldShowProModal: () => load().proConversionSignal,
+    shouldShowAffiliateOffer: () => load().affiliateEligible,
+    getProfile: load,
+    resetProfile: () => localStorage.removeItem(STORAGE_KEY),
+  };
 })();
