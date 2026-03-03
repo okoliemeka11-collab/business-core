@@ -199,6 +199,7 @@ const Revenue = (() => {
     }
   };
 
-  return { injectAffiliateLinks, showUpgradeModal, showAffiliateOffer, closeModal, route, AFFILIATES, STRIPE };
+  const _flagPaymentPending = () => { _paymentPending = true; attachPaymentReturnListener(); };
+  return { injectAffiliateLinks, showUpgradeModal, showAffiliateOffer, closeModal, route, AFFILIATES, STRIPE, _flagPaymentPending };
 
 })();
