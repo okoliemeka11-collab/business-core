@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Dashboard — Scrivlo</title>
+<meta name="robots" content="noindex"/>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+<header class="dashboard-header">
+<div class="dashboard-logo">
+<svg width="24" height="24" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#6c63ff"/><path d="M22 11.5C22 11.5 20.5 10 18 10C15 10 13 11.8 13 14C13 16.2 14.8 17 17.5 17.8C20.2 18.6 23 19.5 23 22C23 24.5 20.8 26 18 26C15.2 26 13 24.2 13 24.2" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
+Scrivlo
+</div>
+<div class="dashboard-user">
+<span class="dashboard-email" id="userEmail">Loading...</span>
+<span class="tier-badge tier-free" id="tierBadge">FREE</span>
+<button onclick="signOut()" style="background:rgba(255,255,255,.1);border:none;color:#9ca3af;padding:.35rem .75rem;border-radius:6px;cursor:pointer;font-size:.8rem">Sign out</button>
+</div>
+</header>
+<main class="dashboard-main">
+<div class="dashboard-tabs">
+<button class="tab-btn active" onclick="switchTab('draft',this)">AI Draft Generator</button>
+<button class="tab-btn pro-tab" onclick="switchTab('repurpose',this)" id="repurposeTab">Repurposing Engine</button>
+<button class="tab-btn pro-tab" onclick="switchTab('seo',this)" id="seoTab">SEO Landing Page</button>
+</div>
+<div id="tab-draft" class="tab-panel active">
+<div class="draft-form">
+<label for="topicInput">What do you want to write about?</label>
+<div class="draft-input-row">
+<input class="draft-input" id="topicInput" type="text" placeholder="e.g. How to get your first 100 users as a solo founder" autocomplete="off"/>
+<button class="btn btn-primary" onclick="generateDraft()" id="genBtn">Generate</button>
+</div>
+<div class="draft-quota" id="quotaInfo"></div>
+</div>
+<div class="draft-output" id="outputArea">Your AI-drafted article will appear here.</div>
+<div class="action-buttons" id="actionBtns" style="display:none">
+<button class="action-btn action-btn-primary" onclick="copyDraft()">Copy Markdown</button>
+<button class="action-btn action-btn-secondary" onclick="exportHTML()">Export HTML</button>
+<button class="action-btn action-btn-secondary" onclick="regenerate()">Regenerate</button>
+</div>
+</div>
+<div id="tab-repurpose" class="tab-panel">
+<div class="repurpose-form">
+<label style="font-size:.875rem;font-weight:700;display:block;margin-bottom:.75rem">Paste your draft below to repurpose it across 5 platforms</label>
+<textarea class="repurpose-textarea" id="repurposeDraft" placeholder="Paste any blog post, article, or long-form draft here (min 100 characters)..."></textarea>
+<button class="btn btn-primary" onclick="repurposeDraft()" id="repurposeBtn">Repurpose to 5 Platforms</button>
+<div id="repurposeStatus" style="font-size:.82rem;color:#6c63ff;margin-top:.6rem;min-height:1.2rem"></div>
+</div>
+<div class="repurpose-output" id="repurposeOutput" style="display:none">
+<div class="repurpose-tab-row">
+<button class="repurpose-tab active" onclick="showPlatform('twitter',this)">𝕏 Thread</button>
+<button class="repurpose-tab" onclick="showPlatform('linkedin',this)">LinkedIn</button>
+<button class="repurpose-tab" onclick="showPlatform('email',this)">Email</button>
+<button class="repurpose-tab" onclick="showPlatform('reddit',this)">Reddit</button>
+<button class="repurpose-tab" onclick="showPlatform('shortBlog',this)">Short Blog</button>
+</div>
+<div class="repurpose-content-box" id="repurposeContent"></div>
+<button class="action-btn action-btn-primary" onclick="copyRepurposed()" style="margin-top:.75rem">Copy</button>
+</div>
+</div>
+<div id="tab-seo" class="tab-panel">
+<div class="draft-form">
+<div style="margin-bottom:1rem">
+<label style="display:block;font-size:.875rem;font-weight:700;margin-bottom:.4rem">Product name</label>
+<input class="draft-input" id="lpName" type="text" placeholder="e.g. Scrivlo" style="width:100%"/>
+</div>
+<div style="margin-bottom:1rem">
+<label style="display:block;font-size:.875rem;font-weight:700;margin-bottom:.4rem">One-line description</label>
+<textarea id="lpDesc" rows="3" placeholder="e.g. Free AI content generator that turns any idea into a publish-ready draft in 30 seconds" style="width:100%;padding:.75rem 1rem;border:1.5px solid #e4e4f0;border-radius:10px;font-size:.9rem;resize:vertical;outline:none;font-family:inherit"></textarea>
+</div>
+<button class="btn btn-primary" onclick="generateLandingPage()" id="lpBtn">Generate SEO Landing Page</button>
+<div id="lpStatus" style="font-size:.82rem;color:#6c63ff;margin-top:.6rem;min-height:1.2rem"></div>
+</div>
+<div id="lpOutput"></div>
+</div>
+</main>
+</div>
+<div id="upgradeModal" class="upgrade-modal-overlay" style="display:none">
+<div class="upgrade-modal">
+<div style="font-size:2rem;margin-bottom:.5rem">🚀</div>
+<h2 id="upgradeTitle">Upgrade to Pro</h2>
+<p id="upgradeMsg">Unlock unlimited drafts and exclusive Pro features.</p>
+<ul class="upgrade-features-list">
+<li>Unlimited AI drafts (no daily limit)</li>
+<li>Content Repurposing Engine — 1 draft to 5 platforms</li>
+<li>SEO Landing Page Generator</li>
+<li>Priority Groq inference</li>
+</ul>
+<a href="https://buy.stripe.com/test_cNi00lejKe1g6CV3oo2wU00" target="_blank" class="btn btn-primary" style="width:100%;display:block;text-align:center" onclick="markPaymentPending()">Upgrade to Pro — $9/mo</a>
+<button class="upgrade-dismiss" onclick="closeUpgradeModal()">Maybe later</button>
+</div>
+</div>
+<script src="flywheel.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
