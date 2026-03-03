@@ -1,8 +1,27 @@
-// revenue.js - Scrivlo Revenue Optimization Engine
-// Frictionless, zero-human-intervention revenue layer.
-// Stripe Payment Link injected — no backend required.
+// revenue.js — Scrivlo Revenue Optimization Engine v2.0
+// Task 2 fix: Payment Loop resolved.
+//
+// ROOT CAUSE: Stripe Payment Links (buy.stripe.com) do NOT accept a success_url
+// URL parameter — that only works with Stripe Checkout Sessions (server-side).
+// Users were landing on Stripe's generic confirmation page with no path back to
+// Pro access on the site.
+//
+// FIX (zero-backend, $0):
+//   1. Stripe CTAs open in a NEW TAB (target="_blank").
+//   2. A window 'focus' + 'visibilitychange' listener fires when the user returns
+//      to this tab after completing payment.
+//   3. On tab return, if we flagged a pending payment, we show an "Activate Pro"
+//      confirmation card — one click sets scrivlo_pro=true in localStorage and
+//      shows the success banner from app.js.
+//   4. For Stripe-configured success_url (when owner sets it in the dashboard),
+//      app.js already handles ?payment=success on load — that path is also covered.
+//
+// UPGRADE PATH (when Stripe is live): Change pro_monthly/pro_annual to real
+// Stripe Payment Links with the "Redirect to URL" setting pointing to
+// https://business-core-three.vercel.app/?payment=success
 
 const Revenue = (() => {
+
   const STRIPE = {
     pro_monthly: 'https://buy.stripe.com/test_cNi00lejKe1g6CV3oo2wU00',
     pro_annual:  'https://buy.stripe.com/test_cNi00lejKe1g6CV3oo2wU00',
@@ -24,6 +43,79 @@ const Revenue = (() => {
     return markdownContent + footer;
   };
 
+  // ── PAYMENT RETURN DETECTOR ─────────────────────────────────────────────────
+  // Fires when the user switches back to this tab after visiting Stripe.
+  let _paymentPending = false;
+  let _paymentListenerAttached = false;
+
+  const onPaymentWindowReturn = () => {
+    if (!_paymentPending) return;
+    _paymentPending = false;
+    showPaymentConfirmCard();
+  };
+
+  const attachPaymentReturnListener = () => {
+    if (_paymentListenerAttached) return;
+    _paymentListenerAttached = true;
+
+    // visibilitychange fires when tab becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onPaymentWindowReturn();
+    });
+
+    // focus fires on the window when tab regains focus
+    window.addEventListener('focus', onPaymentWindowReturn);
+  };
+
+  const showPaymentConfirmCard = () => {
+    if (document.getElementById('scrivlo-payment-confirm')) return;
+
+    const card = document.createElement('div');
+    card.id = 'scrivlo-payment-confirm';
+    card.style.cssText = [
+      'position:fixed;bottom:1.5rem;right:1.5rem;background:#fff',
+      'border-radius:16px;padding:1.5rem;max-width:340px;z-index:2000',
+      'box-shadow:0 8px 40px rgba(92,110,248,.25);border:2px solid #5c6ef8'
+    ].join(';');
+
+    card.innerHTML = (
+      '<div style="font-size:1.5rem;margin-bottom:.35rem">🎉</div>' +
+      '<strong style="display:block;color:#1a1a2e;margin-bottom:.4rem">Did you just complete payment?</strong>' +
+      '<p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem">Click below to instantly activate your Pro access on this device.</p>' +
+      '<div style="display:grid;gap:.5rem">' +
+      '<button id="scrivlo-activate-pro" style="background:#5c6ef8;color:#fff;border:none;border-radius:10px;' +
+      'padding:.75rem 1.25rem;font-weight:700;cursor:pointer;font-size:.9rem">✅ Yes — Activate Pro Now</button>' +
+      '<button id="scrivlo-not-yet" style="background:#f3f4f6;border:none;border-radius:8px;' +
+      'padding:.5rem 1rem;color:#6b7280;cursor:pointer;font-size:.82rem">No, I didn\'t pay yet</button>' +
+      '</div>'
+    );
+
+    document.body.appendChild(card);
+
+    document.getElementById('scrivlo-activate-pro').addEventListener('click', () => {
+      try {
+        localStorage.setItem('scrivlo_pro', 'true');
+        localStorage.setItem('scrivlo_pro_ts', Date.now().toString());
+      } catch (e) {}
+      card.remove();
+      // Re-use app.js success banner if available
+      if (typeof showProSuccessBanner === 'function') showProSuccessBanner();
+      else {
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2000;background:linear-gradient(90deg,#5c6ef8,#7c3aed);color:#fff;text-align:center;padding:.75rem;font-weight:700';
+        banner.textContent = '🎉 Pro access activated — unlimited drafts unlocked!';
+        document.body.prepend(banner);
+        setTimeout(() => banner.remove(), 5000);
+      }
+    });
+
+    document.getElementById('scrivlo-not-yet').addEventListener('click', () => card.remove());
+
+    // Auto-remove after 30 seconds
+    setTimeout(() => { if (card.parentElement) card.remove(); }, 30000);
+  };
+
+  // ── MODAL ───────────────────────────────────────────────────────────────────
   const closeModal = () => {
     const m = document.getElementById('scrivlo-upgrade-modal');
     if (m) m.remove();
@@ -31,26 +123,50 @@ const Revenue = (() => {
 
   const showUpgradeModal = () => {
     if (document.getElementById('scrivlo-upgrade-modal')) return;
+
     const modal = document.createElement('div');
     modal.id = 'scrivlo-upgrade-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center';
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
     const inner = document.createElement('div');
     inner.style.cssText = 'background:#fff;border-radius:16px;padding:2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2)';
-    inner.innerHTML =
+    inner.innerHTML = (
       '<div style="font-size:2rem;margin-bottom:.5rem">\u{1F680}</div>' +
       '<h2 style="font-size:1.4rem;font-weight:800;margin-bottom:.5rem">You have used your 5 free drafts</h2>' +
       '<p style="color:#6b7280;margin-bottom:1.5rem">Upgrade to Pro for unlimited drafts, brand voice training, and one-click CMS publish. Just $9/month.</p>' +
       '<div style="display:grid;gap:.75rem">' +
-        '<a href="' + STRIPE.pro_monthly + '" target="_blank" style="background:#5c6ef8;color:#fff;padding:.85rem 2rem;border-radius:12px;font-weight:700;text-decoration:none;display:block">Upgrade to Pro — $9/mo</a>' +
-        '<a href="' + STRIPE.pro_annual + '" target="_blank" style="background:#ede9fe;color:#5b21b6;padding:.85rem 2rem;border-radius:12px;font-weight:700;text-decoration:none;display:block">Annual — $79/yr (save $29)</a>' +
-        '<button id="scrivlo-modal-dismiss" style="background:none;border:1px solid #e5e7eb;border-radius:8px;color:#6b7280;cursor:pointer;font-size:.85rem;padding:.5rem 1rem;margin-top:.25rem">Maybe later</button>' +
+      '<a href="' + STRIPE.pro_monthly + '" target="_blank" id="scrivlo-stripe-monthly" ' +
+      'style="background:#5c6ef8;color:#fff;padding:.85rem 2rem;border-radius:12px;font-weight:700;text-decoration:none;display:block">' +
+      'Upgrade to Pro — $9/mo</a>' +
+      '<a href="' + STRIPE.pro_annual + '" target="_blank" id="scrivlo-stripe-annual" ' +
+      'style="background:#ede9fe;color:#5b21b6;padding:.85rem 2rem;border-radius:12px;font-weight:700;text-decoration:none;display:block">' +
+      'Annual — $79/yr (save $29)</a>' +
+      '<button id="scrivlo-modal-dismiss" style="background:none;border:1px solid #e5e7eb;border-radius:8px;color:#6b7280;cursor:pointer;font-size:.85rem;padding:.5rem 1rem;margin-top:.25rem">Maybe later</button>' +
       '</div>' +
-      '<p style="font-size:.75rem;color:#9ca3af;margin-top:1rem">No contracts. Cancel anytime.</p>';
+      '<p style="font-size:.75rem;color:#9ca3af;margin-top:1rem">No contracts. Cancel anytime.</p>'
+    );
+
     modal.appendChild(inner);
     document.body.appendChild(modal);
+
+    // Attach payment return listener when user clicks Stripe links
+    ['scrivlo-stripe-monthly', 'scrivlo-stripe-annual'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('click', () => {
+          _paymentPending = true;
+          attachPaymentReturnListener();
+          closeModal();
+        });
+      }
+    });
+
     document.getElementById('scrivlo-modal-dismiss').addEventListener('click', closeModal);
-    const escHandler = (e) => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); } };
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); }
+    };
     document.addEventListener('keydown', escHandler);
   };
 
@@ -62,10 +178,11 @@ const Revenue = (() => {
     dismiss.textContent = 'Dismiss';
     dismiss.addEventListener('click', () => toast.remove());
     const inner = document.createElement('div');
-    inner.innerHTML =
+    inner.innerHTML = (
       '<div style="font-weight:700;margin-bottom:.3rem">Earn with Scrivlo</div>' +
       '<p style="font-size:.85rem;color:#9ca3af;margin-bottom:.75rem">You are a power user. Share your link and earn 30% recurring commission.</p>' +
-      '<a href="https://business-core-three.vercel.app/#pricing" style="background:#5c6ef8;color:#fff;padding:.5rem 1rem;border-radius:8px;font-weight:700;font-size:.85rem;text-decoration:none;display:inline-block">Get your link</a>';
+      '<a href="https://business-core-three.vercel.app/#pricing" style="background:#5c6ef8;color:#fff;padding:.5rem 1rem;border-radius:8px;font-weight:700;font-size:.85rem;text-decoration:none;display:inline-block">Get your link</a>'
+    );
     toast.appendChild(inner);
     toast.appendChild(dismiss);
     document.body.appendChild(toast);
@@ -83,4 +200,5 @@ const Revenue = (() => {
   };
 
   return { injectAffiliateLinks, showUpgradeModal, showAffiliateOffer, closeModal, route, AFFILIATES, STRIPE };
+
 })();
