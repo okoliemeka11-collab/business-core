@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sign In — Scrivlo</title>
+<meta name="robots" content="noindex"/>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="auth-page">
+<div class="auth-card">
+<div style="text-align:center;margin-bottom:1.5rem"><a href="/" style="font-weight:800;font-size:1.2rem;color:#0a0a0f">Scrivlo</a></div>
+<h2>Welcome back</h2>
+<p class="auth-sub">Sign in to access your AI drafts.</p>
+<div class="form-error" id="err"></div>
+<form onsubmit="go(event)">
+<div class="form-group"><label>Email</label><input type="email" id="em" placeholder="you@example.com" required autocomplete="email"/></div>
+<div class="form-group"><label>Password</label><input type="password" id="pw" placeholder="Your password" required autocomplete="current-password"/></div>
+<button type="submit" class="auth-submit" id="btn">Sign in</button>
+</form>
+<div class="auth-switch">No account? <a href="/signup">Create one free</a></div>
+</div>
+</div>
+<script>
+async function go(e){
+e.preventDefault();
+const btn=document.getElementById('btn');
+const err=document.getElementById('err');
+btn.disabled=true;btn.textContent='Signing in...';
+err.classList.remove('visible');
+try{
+const r=await fetch('/api/auth?action=login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:document.getElementById('em').value.trim(),password:document.getElementById('pw').value})});
+const d=await r.json();
+if(!r.ok){err.textContent=d.message||'Invalid email or password.';err.classList.add('visible');btn.disabled=false;btn.textContent='Sign in';return;}
+if(d.token)localStorage.setItem('scrivlo_token',d.token);
+if(d.user)localStorage.setItem('scrivlo_user',JSON.stringify(d.user));
+window.location.href='/dashboard';
+}catch(ex){err.textContent='Network error.';err.classList.add('visible');btn.disabled=false;btn.textContent='Sign in';}
+}
+(function checkAlreadyLoggedIn(){
+const t=localStorage.getItem('scrivlo_token');
+if(t){fetch('/api/auth?action=me',{credentials:'include',headers:{Authorization:'Bearer '+t}}).then(r=>r.json()).then(d=>{if(d.loggedIn)window.location.href='/dashboard';}).catch(()=>{});}
+})();
+</script>
+</body>
+</html>
