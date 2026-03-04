@@ -1,27 +1,35 @@
 {
-        "version": 2,
-        "outputDirectory": "src",
-        "functions": {
-                    "api/generate.js": {
-                                    "maxDuration": 10
-                    }
-        },
-        "rewrites": [
-                    { "source": "/api/generate", "destination": "/api/generate" },
-                    { "source": "/",             "destination": "/index.html" },
-                    { "source": "/(.*)\\.css",   "destination": "/$1.css" },
-                    { "source": "/(.*)\\.js",    "destination": "/$1.js" },
-                    { "source": "/(.*)",         "destination": "/index.html" }
-        ],
-        "headers": [
-                    {
+          "version": 2,
+          "outputDirectory": "src",
+          "functions": {
+                      "api/generate.js":  { "maxDuration": 15 },
+                      "api/auth.js":      { "maxDuration": 10 },
+                      "api/repurpose.js": { "maxDuration": 20 },
+                      "api/seo-page.js":  { "maxDuration": 20 }
+          },
+          "rewrites": [
+                      { "source": "/api/generate",  "destination": "/api/generate"  },
+                      { "source": "/api/auth",      "destination": "/api/auth"      },
+                      { "source": "/api/repurpose", "destination": "/api/repurpose" },
+                      { "source": "/api/seo-page",  "destination": "/api/seo-page"  },
+                      { "source": "/",              "destination": "/index.html"    },
+                      { "source": "/login",         "destination": "/login.html"    },
+                      { "source": "/signup",        "destination": "/signup.html"   },
+                      { "source": "/dashboard",     "destination": "/dashboard.html"},
+                      { "source": "/(.*)\\.css",    "destination": "/$1.css"        },
+                      { "source": "/(.*)\\.js",     "destination": "/$1.js"         },
+                      { "source": "/(.*)",          "destination": "/index.html"    }
+          ],
+          "headers": [
+                      {
                                     "source": "/(.*)",
                                     "headers": [
-                                                        { "key": "X-Content-Type-Options",  "value": "nosniff" },
-                                                        { "key": "X-Frame-Options",          "value": "DENY" },
-                                                        { "key": "X-XSS-Protection",         "value": "1; mode=block" },
-                                                        { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" }
+                                                    { "key": "X-Content-Type-Options",  "value": "nosniff"                        },
+                                                    { "key": "X-Frame-Options",          "value": "DENY"                           },
+                                                    { "key": "X-XSS-Protection",         "value": "1; mode=block"                  },
+                                                    { "key": "Referrer-Policy",          "value": "strict-origin-when-cross-origin"},
+                                                    { "key": "Permissions-Policy",       "value": "camera=(), microphone=()"       }
                                     ]
-                    }
-        ]
+                      }
+          ]
 }
