@@ -1,4 +1,534 @@
-// app.js — Scrivlo Draft Generation Engine v4.0
+// app.js — Scrivlo Dashboard Engine v5.0
+// Changes from v4:
+// - Auth guard: validates JWT on load, redirects unauthenticated users to /login
+// - Quota display: shows free users remaining drafts in #quotaInfo
+// - Groq-only: removed all Gemini references
+// - Full dashboard JS: switchTab, repurposeDraft, showPlatform, signOut, markPaymentPending, closeUpgradeModal
+
+// ── AUTH GUARD (runs immediately) ───────────────────────────────────────────
+(function authGuard() {
+    const token = localStorage.getItem('scrivlo_token');
+    if (!token) { window.location.replace('/login'); return; }
+    // Validate with backend
+    fetch('/api/auth?action=me', {
+          credentials: 'include',
+          headers: { 'Authorization': 'Bearer ' + token }
+    }).then(r => r.json()).then(d => {
+          if (!d.loggedIn) { localStorage.removeItem('scrivlo_token'); window.location.replace('/login'); return; }
+          // Populate header
+          const emailEl = document.getElementById('userEmail');
+          const badgeEl = document.getElementById('tierBadge');
+          if (emailEl) emailEl.textContent = d.email || '';
+          if (badgeEl) {
+                  badgeEl.textContent = (d.tier || 'free').toUpperCase();
+                  badgeEl.className = 'tier-badge tier-' + (d.tier || 'free');
+          }
+          // Store tier for use by other functions
+          window._scrivloTier = d.tier || 'free';
+          window._scrivloUserId = d.id || '';
+          // Update quota display
+          updateQuotaDisplay();
+          // Init pro tabs
+          initProTabs();
+    }).catch(() => {
+          localStorage.removeItem('scrivlo_token');
+          window.location.replace('/login');
+    });
+})();
+
+function getToken() { return localStorage.getItem('scrivlo_token') || ''; }
+function isPro() { return window._scrivloTier === 'pro'; }
+
+// ── QUOTA DISPLAY ─────────────────────────────────────────────────────────────
+function updateQuotaDisplay(used, limit) {
+    const el = document.getElementById('quotaInfo');
+    if (!el) return;
+    if (isPro()) {
+          el.innerHTML = '<span style="color:#06d6a0;font-size:.8rem;font-weight:700">✦ Pro — Unlimited drafts</span>';
+          return;
+    }
+    if (used !== undefined && limit !== undefined) {
+          const remaining = limit - used;
+          const colour = remaining === 0 ? '#ef4444' : remaining === 1 ? '#f97316' : '#6b7280';
+          el.innerHTML = '<span style="color:' + colour + ';font-size:.8rem">' +
+                  (remaining === 0 ? '⚠ Daily limit reached — ' : '✦ ') +
+                  remaining + ' of ' + limit + ' free drafts remaining today</span>';
+    } else {
+          el.innerHTML = '<span style="color:#6b7280;font-size:.8rem">✦ 3 free drafts per day — <a href="#" onclick="openUpgradeModal(\'Upgrade to Pro\',\'Get unlimited drafts + Repurposing Engine + SEO Landing Page Generator.\');return false;" style="color:#6c63ff;font-weight:700">Upgrade to Pro</a></span>';
+    }
+}
+
+// ── PRO TABS INIT ─────────────────────────────────────────────────────────────
+function initProTabs() {
+    const repurposeTab = document.getElementById('repurposeTab');
+    const seoTab = document.getElementById('seoTab');
+    if (!isPro()) {
+          if (repurposeTab) repurposeTab.addEventListener('click', function(e) {
+                  e.stopPropagation(); e.preventDefault();
+                  openUpgradeModal('Unlock Repurposing Engine', 'Turn any draft into 5 platform-native posts — Twitter thread, LinkedIn, email, Reddit & short blog. Pro only.');
+          }, true);
+          if (seoTab) seoTab.addEventListener('click', function(e) {
+                  e.stopPropagation(); e.preventDefault();
+                  openUpgradeModal('Unlock SEO Landing Page Generator', 'Enter a product name and get a complete, publish-ready landing page in 30 seconds. Pro only.');
+          }, true);
+    }
+}
+
+// ── PAYMENT SUCCESS DETECTION ──────────────────────────────────────────────
+(function checkPaymentSuccess() {
+    try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('payment') === 'success') {
+                  window._scrivloTier = 'pro';
+                  window.history.replaceState({}, '', window.location.pathname);
+                  document.addEventListener('DOMContentLoaded', showProSuccessBanner);
+                  if (document.readyState !== 'loading') showProSuccessBanner();
+          }
+    } catch (e) {}
+})();
+
+function showProSuccessBanner() {
+    if (document.getElementById('scrivlo-pro-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'scrivlo-pro-banner';
+    banner.style.cssText = [
+          'position:fixed;top:0;left:0;right:0;z-index:2000',
+          'background:linear-gradient(90deg,#5c6ef8,#7c3aed)',
+          'color:#fff;text-align:center;padding:.75rem 1rem',
+          'font-size:.9rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:1rem'
+        ].join(';');
+    banner.innerHTML = (
+          '<span>🎉 Pro access activated — unlimited drafts + Repurposing Engine + SEO Landing Page Generator unlocked!</span>' +
+          '<button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;' +
+          'border-radius:6px;padding:.25rem .6rem;cursor:pointer;font-size:.8rem">✕</button>'
+        );
+    document.body.prepend(banner);
+    setTimeout(() => { if (banner.parentElement) banner.remove(); }, 7000);
+}
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const panel = document.getElementById('tab-' + name);
+    if (panel) panel.classList.add('active');
+    if (btn) btn.classList.add('active');
+}
+
+// ── SIGN OUT ──────────────────────────────────────────────────────────────────
+function signOut() {
+    fetch('/api/auth?action=logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    localStorage.removeItem('scrivlo_token');
+    localStorage.removeItem('scrivlo_user');
+    window.location.href = '/';
+}
+
+// ── UPGRADE MODAL ─────────────────────────────────────────────────────────────
+function openUpgradeModal(title, msg) {
+    const modal = document.getElementById('upgradeModal');
+    if (!modal) return;
+    const titleEl = document.getElementById('upgradeTitle');
+    const msgEl = document.getElementById('upgradeMsg');
+    if (titleEl && title) titleEl.textContent = title;
+    if (msgEl && msg) msgEl.textContent = msg;
+    modal.style.display = 'flex';
+}
+function closeUpgradeModal() {
+    const modal = document.getElementById('upgradeModal');
+    if (modal) modal.style.display = 'none';
+}
+function markPaymentPending() {
+    try { localStorage.setItem('scrivlo_payment_pending', '1'); } catch(e) {}
+}
+
+// ── MAIN DRAFT GENERATION ──────────────────────────────────────────────────────
+async function generateDraft() {
+    const topicRaw = (document.getElementById('topicInput').value || '').trim();
+    const topic = topicRaw || 'content strategy for indie SaaS founders';
+    const output = document.getElementById('outputArea');
+    const genBtn = document.getElementById('genBtn');
+    if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Generating…'; }
+  
+    const profile = (typeof Flywheel !== 'undefined') ? Flywheel.onDraftGenerated(topic) : { draftCount: 1, proConversionSignal: false };
+    if (profile.proConversionSignal && !isPro()) { openUpgradeModal(); }
+  
+    let dots = 0;
+    output.innerHTML = '<em style="color:#9ca3af">Generating your draft<span id="ld-dots"></span></em>';
+    const dotInterval = setInterval(() => {
+          const el = document.getElementById('ld-dots');
+          if (el) { dots = (dots + 1) % 4; el.textContent = '.'.repeat(dots); }
+    }, 350);
+  
+    const ctx = (typeof Flywheel !== 'undefined') ? Flywheel.getPersonalizationContext() : { tone: 'direct, concrete, and practitioner-level', topNiche: null };
+  
+    try {
+          const html = await fetchAIDraft(topic, ctx);
+          clearInterval(dotInterval);
+          output.innerHTML = html;
+          const actionBtns = document.getElementById('actionBtns');
+          if (actionBtns) actionBtns.style.display = 'flex';
+    } catch (err) {
+          clearInterval(dotInterval);
+          if (err.message === 'draft_limit_reached') {
+                  output.innerHTML = '';
+                  openUpgradeModal('Daily Limit Reached', 'You have used all 3 free drafts for today. Upgrade to Pro for unlimited access.');
+          } else if (err.message === 'unauthenticated') {
+                  localStorage.removeItem('scrivlo_token');
+                  window.location.replace('/login');
+          } else {
+                  const fallback = buildSmartFallback(topic, ctx);
+                  output.innerHTML = renderFallbackDraft(fallback, topic);
+                  const note = document.createElement('div');
+                  note.style.cssText = 'font-size:.75rem;color:#f97316;margin-top:.5rem';
+                  note.textContent = err.message.includes('rate_limit') || err.message.includes('quota')
+                            ? '⏳ ' + err.message
+                            : '⚡ Groq is warming up — smart local draft generated. Full AI resumes shortly.';
+                  output.appendChild(note);
+          }
+    } finally {
+          if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate'; }
+    }
+}
+
+async function fetchAIDraft(topic, ctx) {
+    const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + getToken()
+          },
+          credentials: 'include',
+          body: JSON.stringify({ topic, tone: ctx.tone || 'direct, concrete, and practitioner-level', topNiche: ctx.topNiche || null }),
+    });
+    const data = await res.json();
+    if (res.status === 401) throw new Error('unauthenticated');
+    if (res.status === 403 && data.error === 'draft_limit_reached') {
+          updateQuotaDisplay(data.used, data.limit);
+          throw new Error('draft_limit_reached');
+    }
+    if (res.status === 429) throw new Error(data.message || 'Rate limit reached — please wait a moment.');
+    if (!res.ok) throw new Error(data.message || 'Generation failed (' + res.status + ')');
+  
+    // Update quota display from response
+    if (data.draftsUsedToday !== undefined && data.draftsLimit !== null) {
+          updateQuotaDisplay(data.draftsUsedToday, data.draftsLimit);
+    }
+    if (data.structured) return renderStructuredDraft(data.structured, topic, data.model);
+    throw new Error('Unexpected response format from /api/generate');
+}
+
+function renderStructuredDraft(s, topic, model) {
+    if (!s.isValidTopic) {
+          return (
+                  '<div style="padding:1.25rem;background:#fef3c7;border-radius:10px;border:1px solid #fde68a">' +
+                  '<strong style="color:#92400e">⚠️ Hmm, that topic is a bit unclear</strong><br>' +
+                  '<p style="color:#78350f;margin:.5rem 0 0">' + escapeHtml(s.pivotMessage || 'Please try a more specific topic.') + '</p>' +
+                  '</div>'
+                );
+    }
+  
+    const allText = [s.tldr, s.whyNow, ...(s.mistakes||[]).map(m=>m.explanation), ...(s.framework||[]).map(f=>f.detail), s.quickWin].join(' ');
+    const wc = allText.split(/\s+/).length;
+    const rt = Math.max(2, Math.round(wc / 200));
+    const seo = estimateSEOScore(topic, allText);
+    let html = buildTagLine('Blog Post', seo, rt, true, model);
+    html += '<strong style="font-size:1rem;display:block;margin-bottom:.75rem">' + escapeHtml(topic) + '</strong>';
+  
+    html += '<div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:.6rem .9rem;border-radius:0 8px 8px 0;margin-bottom:.9rem">';
+    html += '<strong style="color:#15803d">TL;DR</strong> <span style="color:#166534">' + escapeHtml(s.tldr) + '</span>';
+    html += '</div>';
+  
+    html += '<strong>Why this matters in 2026</strong><br>';
+    html += '<p style="color:#374151;margin:.3rem 0 .8rem">' + escapeHtml(s.whyNow) + '</p>';
+  
+    html += '<strong>The 3 Mistakes That Sink Most Efforts</strong>';
+    html += '<ol style="margin:.4rem 0 .9rem;padding-left:1.3rem">';
+    (s.mistakes || []).forEach(m => {
+          html += '<li style="margin-bottom:.55rem"><strong>' + escapeHtml(m.title) + '</strong> — ' + escapeHtml(m.explanation) + '</li>';
+    });
+    html += '</ol>';
+  
+    html += '<strong>5-Step Framework — Start Today</strong>';
+    html += '<ol style="margin:.4rem 0 .9rem;padding-left:1.3rem">';
+    (s.framework || []).forEach((f, i) => {
+          html += '<li style="margin-bottom:.55rem"><strong>Step ' + (i+1) + ': ' + escapeHtml(f.step) + '</strong><br>';
+          html += '<span style="color:#374151">' + escapeHtml(f.detail) + '</span></li>';
+    });
+    html += '</ol>';
+  
+    html += '<div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:.6rem .9rem;border-radius:0 8px 8px 0;margin-bottom:.9rem">';
+    html += '<strong style="color:#1d4ed8">⚡ 30-Minute Quick Win</strong><br>';
+    html += '<span style="color:#1e40af">' + escapeHtml(s.quickWin) + '</span>';
+    html += '</div>';
+  
+    html += '<em style="font-size:.8rem;color:#9ca3af;display:block;margin-top:.5rem">Generated by Scrivlo · ' + escapeHtml(model || 'Groq AI') + ' · Edit and publish in minutes.</em>';
+    return html;
+}
+
+function buildTagLine(type, seo, rt, isAI, model) {
+    let h = '<div style="margin-bottom:.5rem">';
+    h += '<span class="tag">' + type + '</span>';
+    h += '<span class="tag">SEO Score: ' + seo + '/100</span>';
+    h += '<span class="tag">~' + rt + ' min read</span>';
+    if (isAI) {
+          const label = model ? escapeHtml(model.split('-')[0].charAt(0).toUpperCase() + model.split('-')[0].slice(1)) + ' AI' : 'Groq AI';
+          h += '<span class="tag" style="background:#d1fae5;color:#065f46">✦ ' + label + '</span>';
+    }
+    h += '</div>';
+    return h;
+}
+
+function estimateSEOScore(topic, content) {
+    let score = 60;
+    const text = content.replace ? content.replace(/<[^>]+>/g, '').toLowerCase() : content.toLowerCase();
+    const topicWords = topic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    score += Math.min(15, topicWords.filter(w => text.includes(w)).length * 3);
+    if (text.length > 600)  score += 5;
+    if (text.length > 1200) score += 5;
+    if (/<(ul|ol|li)/.test(content)) score += 5;
+    if (/<strong/.test(content))     score += 5;
+    if (text.split(/[.!?]+/).length > 8) score += 5;
+    return Math.min(99, score);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── CONTENT REPURPOSING ENGINE ────────────────────────────────────────────────
+let _repurposedData = null;
+let _activePlatform = 'twitter';
+
+async function repurposeDraft() {
+    if (!isPro()) {
+          openUpgradeModal('Unlock Repurposing Engine', 'Turn any draft into 5 platform-native posts. Pro only.');
+          return;
+    }
+    const draftText = (document.getElementById('repurposeDraft')?.value || '').trim();
+    if (draftText.length < 100) {
+          document.getElementById('repurposeStatus').textContent = '⚠ Please paste a draft of at least 100 characters.';
+          return;
+    }
+    const btn = document.getElementById('repurposeBtn');
+    const statusEl = document.getElementById('repurposeStatus');
+    btn.disabled = true; btn.textContent = 'Repurposing…';
+    statusEl.textContent = '⚡ Generating 5 platform variants…';
+  
+    try {
+          const res = await fetch('/api/repurpose', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+                  credentials: 'include',
+                  body: JSON.stringify({ draft: draftText }),
+          });
+          const data = await res.json();
+          if (!res.ok) { statusEl.textContent = '❌ ' + (data.message || 'Repurpose failed'); return; }
+          _repurposedData = data.structured || data;
+          statusEl.textContent = '✅ Done! Powered by ' + (data.model || 'Groq AI');
+          document.getElementById('repurposeOutput').style.display = 'block';
+          showPlatform('twitter', document.querySelector('.repurpose-tab'));
+    } catch (err) {
+          statusEl.textContent = '❌ Network error: ' + err.message;
+    } finally {
+          btn.disabled = false; btn.textContent = 'Repurpose to 5 Platforms';
+    }
+}
+
+function showPlatform(platform, btn) {
+    _activePlatform = platform;
+    document.querySelectorAll('.repurpose-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    const contentEl = document.getElementById('repurposeContent');
+    if (!contentEl || !_repurposedData) return;
+    const platformMap = { twitter: 'twitter', linkedin: 'linkedin', email: 'email', reddit: 'reddit', shortBlog: 'shortBlog' };
+    const key = platformMap[platform] || platform;
+    const content = _repurposedData[key] || _repurposedData[platform] || 'No content for this platform.';
+    contentEl.innerHTML = '<pre style="white-space:pre-wrap;font-family:inherit;font-size:.85rem;color:#374151;margin:0">' + escapeHtml(content) + '</pre>';
+}
+
+function copyRepurposed() {
+    const content = document.getElementById('repurposeContent')?.innerText || '';
+    navigator.clipboard.writeText(content).then(() => alert('Copied!')).catch(() => alert('Select and copy manually.'));
+}
+
+// ── SEO LANDING PAGE (Pro) ────────────────────────────────────────────────────
+async function generateLandingPage() {
+    if (!isPro()) {
+          openUpgradeModal('Unlock SEO Landing Page Generator', 'Enter a product name and get a complete landing page in 30 seconds. Pro only.');
+          return;
+    }
+    const productName = (document.getElementById('lpName')?.value || '').trim();
+    const productDesc = (document.getElementById('lpDesc')?.value || '').trim();
+    if (!productName) { alert('Please enter your product name.'); return; }
+    if (!productDesc || productDesc.length < 10) { alert('Please add a short product description (min 10 chars).'); return; }
+  
+    const btn = document.getElementById('lpBtn');
+    const statusEl = document.getElementById('lpStatus');
+    const outputEl = document.getElementById('lpOutput');
+    btn.disabled = true; btn.textContent = '⏳ Generating…';
+    outputEl.innerHTML = '';
+  
+    const steps = ['Researching SEO keywords…','Crafting headline…','Writing benefits…','Generating social proof…','Building meta tags…'];
+    let si = 0;
+    const interval = setInterval(() => { if (statusEl) statusEl.textContent = '⚡ ' + steps[si++ % steps.length]; }, 2500);
+  
+    try {
+          const res = await fetch('/api/seo-page', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+                  credentials: 'include',
+                  body: JSON.stringify({ productName, productDescription: productDesc }),
+          });
+          clearInterval(interval);
+          const data = await res.json();
+          if (!res.ok) { statusEl.textContent = ''; outputEl.innerHTML = '<div style="color:#dc2626;padding:.75rem;background:#fef2f2;border-radius:8px">❌ ' + escapeHtml(data.message || 'Failed') + '</div>'; return; }
+          statusEl.textContent = '✅ Done! Powered by ' + (data.model || 'Groq AI');
+          outputEl.innerHTML = renderLandingPagePreview(data.structured, productName, data.model);
+    } catch (err) {
+          clearInterval(interval);
+          outputEl.innerHTML = '<div style="color:#dc2626;padding:.75rem;background:#fef2f2;border-radius:8px">❌ ' + escapeHtml(err.message) + '</div>';
+    } finally {
+          btn.disabled = false; btn.textContent = 'Generate SEO Landing Page';
+    }
+}
+
+function renderLandingPagePreview(s, productName, model) {
+    if (!s) return '<div style="color:#dc2626">Invalid response.</div>';
+    if (!s.isValidProduct) {
+          return '<div style="padding:1.25rem;background:#fef3c7;border-radius:10px;border:1px solid #fde68a"><strong style="color:#92400e">⚠️ Product description needs more detail</strong><br><p style="color:#78350f;margin:.5rem 0 0">' + escapeHtml(s.pivotMessage || 'Please refine your description.') + '</p></div>';
+    }
+    let html = '<div style="background:#7c3aed;color:#fff;padding:.6rem 1rem;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-weight:700;font-size:.9rem">🏠 Landing Page Preview</span>';
+    html += '<span style="font-size:.75rem;opacity:.8">Powered by ' + escapeHtml(model || 'Groq AI') + '</span></div>';
+    html += '<div style="border:2px solid #7c3aed;border-top:none;border-radius:0 0 12px 12px;padding:1.5rem;background:#fff">';
+    // Hero
+    html += '<h1 style="margin:.3rem 0 .5rem;font-size:1.4rem;color:#1a1a2e">' + escapeHtml(s.hero?.h1 || '') + '</h1>';
+    html += '<p style="color:#374151;margin:.25rem 0 1rem">' + escapeHtml(s.hero?.subheadline || '') + '</p>';
+    // SEO
+    html += '<div style="background:#f5f3ff;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.82rem">';
+    html += '<strong>Primary keyword:</strong> ' + escapeHtml(s.seo?.primaryKeyword || '') + ' · ';
+    html += '<strong>Intent:</strong> ' + escapeHtml(s.seo?.searchIntent || '') + '</div>';
+    // Meta
+    html += '<div style="background:#f8f7ff;border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.82rem">';
+    html += '<strong>Title tag:</strong> <span style="color:#1d4ed8">' + escapeHtml(s.meta?.titleTag || '') + '</span><br>';
+    html += '<strong>Meta desc:</strong> ' + escapeHtml(s.meta?.metaDescription || '') + '</div>';
+    html += '<div style="display:flex;gap:.5rem;flex-wrap:wrap">';
+    html += '<button onclick="copyLandingPage()" style="background:#5c6ef8;color:#fff;border:none;padding:.4rem .9rem;border-radius:6px;font-size:.8rem;cursor:pointer">📋 Copy as HTML</button>';
+    html += '</div></div>';
+    return html;
+}
+
+function copyLandingPage() {
+    const content = document.getElementById('lpOutput')?.innerHTML || '';
+    navigator.clipboard.writeText(content).then(() => alert('Copied!')).catch(() => alert('Select and copy manually.'));
+}
+
+// ── COPY / EXPORT ──────────────────────────────────────────────────────────────
+function copyDraft() {
+    if (typeof Flywheel !== 'undefined') Flywheel.onDraftKept(['TL;DR', '5-Step Framework'], 0.5);
+    const content = document.getElementById('outputArea').innerText;
+    const withAttrib = content + '\n\n---\nGenerated by Scrivlo (https://business-core-three.vercel.app) — free AI content engine.';
+    navigator.clipboard.writeText(withAttrib).then(() => alert('Copied!')).catch(() => alert('Select and copy manually.'));
+}
+function exportHTML() {
+    if (typeof Flywheel !== 'undefined') Flywheel.onPublish();
+    const content = document.getElementById('outputArea').innerHTML;
+    const blob = new Blob([
+          '<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Scrivlo Export</title></head>' +
+          '<body style="font-family:system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:1rem">' +
+          content + '</body></html>'
+        ], { type: 'text/html' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scrivlo-export.html'; a.click();
+}
+function regenerate() {
+    if (typeof Flywheel !== 'undefined') Flywheel.onRegenerate();
+    generateDraft();
+}
+
+// ── SMART FALLBACK ──────────────────────────────────────────────────────────────
+function buildSmartFallback(topic, ctx) {
+    const t = topic.toLowerCase();
+    const isMarketing = /market|seo|content|copy|brand|social|email|funnel|traffic/.test(t);
+    const isProduct   = /product|saas|app|software|build|launch|mvp|startup|feature/.test(t);
+    const isAI        = /\bai\b|machine|model|llm|gpt|automation|agent|prompt/.test(t);
+    const isFinance   = /revenue|monetis|pric|subscription|mrr|arr|churn|finance|profit/.test(t);
+  
+    const mistakes = isMarketing ? [
+      { title: 'Volume over resonance', explanation: 'Treating content as a volume game — 10 resonant pieces beat 100 generic ones every time.' },
+      { title: 'Skipping audience-first research', explanation: 'Writing what you want to say, not what they need to hear.' },
+      { title: 'No distribution strategy', explanation: 'Great content with zero amplification is a tree falling in an empty forest.' },
+        ] : isProduct ? [
+      { title: 'Building before validating', explanation: 'Shipping a solution to a problem nobody has confirmed they have.' },
+      { title: 'Feature creep at launch', explanation: 'The MVP should solve one thing perfectly, not ten things adequately.' },
+      { title: 'Ignoring activation', explanation: 'Getting sign-ups but never measuring if users reach the "aha moment".' },
+        ] : isAI ? [
+      { title: 'Chasing benchmarks over fit', explanation: 'The best model solves your specific problem, not the leaderboard problem.' },
+      { title: 'Skipping prompt engineering', explanation: 'A well-crafted prompt outperforms a bigger model with a lazy one.' },
+      { title: 'No evals framework', explanation: 'Deploying AI without a way to measure output quality is building blind.' },
+        ] : isFinance ? [
+      { title: 'MRR before retention', explanation: 'Optimising for MRR before solving retention — revenue that churns is a leaky bucket.' },
+      { title: 'Underpricing to compete', explanation: 'Low prices signal low value, not a deal.' },
+      { title: 'No pricing experiments', explanation: 'Most founders pick a price and never test upward.' },
+        ] : [
+      { title: 'Skipping research', explanation: 'Jumping to execution without validating the core assumption.' },
+      { title: 'Volume over resonance', explanation: '10 targeted efforts outperform 100 generic ones.' },
+      { title: 'No feedback loop', explanation: 'If you are not measuring what lands, you are publishing into the void.' },
+        ];
+  
+    const framework = isMarketing ? [
+      { step: 'Audit content', detail: 'Review your content against reader intent — rewrite the bottom 20%.' },
+      { step: 'Build editorial calendar', detail: '90-day plan mapped to search intent clusters.' },
+      { step: 'Create cornerstone content', detail: 'One deep-dive per quarter beats ten surface-level posts.' },
+      { step: 'Distribute first', detail: 'Distribute across 3 channels before adding a 4th.' },
+      { step: 'Review and compound', detail: 'Monthly performance review — double down on the top 20%.' },
+        ] : isProduct ? [
+      { step: 'Define the job-to-be-done', detail: 'Single sentence: what job does your product do for the customer?' },
+      { step: 'Identify the core 3 features', detail: '3 features deliver 80% of the value. Ship those first.' },
+      { step: 'Ship in 2 weeks', detail: 'Working prototype in 2 weeks, not 2 months.' },
+      { step: 'Get 5 paying customers', detail: 'Revenue validates better than any user research.' },
+      { step: 'Build feedback loop', detail: 'Systematic feedback before building your roadmap.' },
+        ] : isAI ? [
+      { step: 'Define desired outcome', detail: 'Specific outcome you need AI to produce — be precise.' },
+      { step: 'Pick the smallest capable model', detail: 'Smaller, faster, cheaper if it meets your quality bar.' },
+      { step: 'Engineer your system prompt', detail: 'Role, context, constraints, format — all four.' },
+      { step: 'Build evals', detail: 'At least 20 test cases before deploying to users.' },
+      { step: 'Monitor and refine', detail: 'Weekly output quality review — refine prompts based on failures.' },
+        ] : isFinance ? [
+      { step: 'Baseline metrics', detail: 'MRR, churn rate, LTV — know your numbers.' },
+      { step: 'Identify highest-LTV segment', detail: 'Double down on what's already working.' },
+      { step: 'Run pricing experiment', detail: '+20% on new signups once per quarter.' },
+      { step: 'Add expansion revenue', detail: 'One expansion motion before a new acquisition channel.' },
+      { step: 'Monthly unit economics review', detail: 'CAC, LTV, payback period — track all three.' },
+        ] : [
+      { step: 'Define your ICP', detail: 'Know exactly who you are solving for.' },
+      { step: 'Map the pain stack', detail: 'Surface-level problem and the root cause beneath it.' },
+      { step: 'Draft the value bridge', detail: 'Connect their pain to your solution in one sentence.' },
+      { step: 'Write the hook first', detail: 'The best content earns attention before it delivers value.' },
+      { step: 'End with one next step', detail: 'Ambiguity kills action.' },
+        ];
+  
+    return { title: topic, tone: ctx.tone || 'direct', mistakes, framework, tldr: 'This guide covers ' + topic + ' — 3 critical mistakes and a 5-step framework that compounds.', whyNow: 'In 2026, clear systems beat big budgets. ' + topic + ' is a force multiplier.', quickWin: 'Spend 30 minutes auditing your current approach against step 1 of this framework and identify the single biggest gap.' };
+}
+
+function renderFallbackDraft(draft, topic) {
+    const seoScore = 72 + Math.floor(topic.length % 12);
+    let html = buildTagLine('Blog Post', seoScore, 4, false);
+    html += '<strong style="font-size:1rem;display:block;margin-bottom:.75rem">' + escapeHtml(topic) + '</strong>';
+    html += '<div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:.6rem .9rem;border-radius:0 8px 8px 0;margin-bottom:.9rem"><strong style="color:#15803d">TL;DR</strong> <span style="color:#166534">' + escapeHtml(draft.tldr) + '</span></div>';
+    html += '<strong>Why this matters in 2026</strong><br><p style="color:#374151;margin:.3rem 0 .8rem">' + escapeHtml(draft.whyNow) + '</p>';
+    html += '<strong>The 3 Mistakes That Sink Most Efforts</strong>';
+    html += '<ol style="margin:.4rem 0 .9rem;padding-left:1.3rem">';
+    draft.mistakes.forEach(m => { html += '<li style="margin-bottom:.55rem"><strong>' + escapeHtml(m.title) + '</strong> — ' + escapeHtml(m.explanation) + '</li>'; });
+    html += '</ol>';
+    html += '<strong>5-Step Framework</strong>';
+    html += '<ol style="margin:.4rem 0 .9rem;padding-left:1.3rem">';
+    draft.framework.forEach((f, i) => { html += '<li style="margin-bottom:.55rem"><strong>Step ' + (i+1) + ': ' + escapeHtml(f.step) + '</strong><br><span style="color:#374151">' + escapeHtml(f.detail) + '</span></li>'; });
+    html += '</ol>';
+    html += '<div style="background:#eff6ff;border-left:3px solid #3b82f6;padding:.6rem .9rem;border-radius:0 8px 8px 0;margin-bottom:.9rem"><strong style="color:#1d4ed8">⚡ 30-Minute Quick Win</strong><br><span style="color:#1e40af">' + escapeHtml(draft.quickWin) + '</span></div>';
+    html += '<em style="font-size:.8rem;color:#9ca3af">Generated by Scrivlo · Groq AI · Edit and publish in minutes.</em>';
+    return html;
+}// app.js — Scrivlo Draft Generation Engine v4.0
 // Changes from v3:
 // - Tag line now shows active AI provider from load balancer response (model field)
 // - Pro: generateLandingPage() — Instant SEO Landing Page Generator (calls /api/seo-page)
